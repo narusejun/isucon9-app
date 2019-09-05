@@ -23,6 +23,9 @@ import (
 	"github.com/labstack/echo"
 	"github.com/labstack/echo-contrib/session"
 	"github.com/labstack/echo/middleware"
+	"go.elastic.co/apm/module/apmecho"
+	"go.elastic.co/apm/module/apmsql"
+	_ "go.elastic.co/apm/module/apmsql/mysql"
 )
 
 const (
@@ -68,7 +71,8 @@ func init() {
 		db_user, db_password, db_host, db_port)
 
 	log.Printf("Connecting to db: %q", dsn)
-	db, _ = sqlx.Connect("mysql", dsn)
+	rdb, _ := apmsql.Open("mysql", dsn)
+	db = sqlx.NewDb(rdb, "mysql")
 	for {
 		err := db.Ping()
 		if err == nil {
@@ -722,6 +726,8 @@ func tRange(a, b int64) []int64 {
 
 func main() {
 	e := echo.New()
+	e.Use(apmecho.Middleware())
+
 	funcs := template.FuncMap{
 		"add":    tAdd,
 		"xrange": tRange,
