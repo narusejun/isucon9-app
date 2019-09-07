@@ -8,6 +8,7 @@ require (
 	github.com/gorilla/context v1.1.1
 	github.com/gorilla/securecookie v1.1.2-0.20180830184016-3a8eb0de0781
 	github.com/gorilla/sessions v1.1.1
+	github.com/jmoiron/sqlx v1.2.0
 	github.com/labstack/echo v3.3.5-retag.0.20180815143527-74f9806b3442+incompatible
 	github.com/labstack/echo-contrib v0.0.0-20180303034000-93dd5f30d581
 	github.com/labstack/gommon v0.2.7

@@ -18,6 +18,8 @@ import (
 
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/gorilla/sessions"
+	"github.com/jmoiron/sqlx"
+	_ "github.com/jmoiron/sqlx"
 	"github.com/labstack/echo"
 	"github.com/labstack/echo-contrib/session"
 	"github.com/labstack/echo/middleware"
@@ -50,10 +52,10 @@ type Sheets struct {
 }
 
 type Sheet struct {
-	ID    int64  `json:"-"`
-	Rank  string `json:"-"`
-	Num   int64  `json:"num"`
-	Price int64  `json:"-"`
+	ID    int64  `json:"-" db:"id"`
+	Rank  string `json:"-" db:"rand"`
+	Num   int64  `json:"num" db:"num"`
+	Price int64  `json:"-" db:"price"`
 
 	Mine           bool       `json:"mine,omitempty"`
 	Reserved       bool       `json:"reserved,omitempty"`
@@ -239,11 +241,7 @@ func getEvent(eventID, loginUserID int64) (*Event, error) {
 	}
 	defer rows.Close()
 
-	for rows.Next() {
-		var sheet Sheet
-		if err := rows.Scan(&sheet.ID, &sheet.Rank, &sheet.Num, &sheet.Price); err != nil {
-			return nil, err
-		}
+	for _, sheet := range sheets {
 		event.Sheets[sheet.Rank].Price = event.Price + sheet.Price
 		event.Total++
 		event.Sheets[sheet.Rank].Total++
@@ -307,7 +305,11 @@ func (r *Renderer) Render(w io.Writer, name string, data interface{}, c echo.Con
 	return r.templates.ExecuteTemplate(w, name, data)
 }
 
-var db *sql.DB
+var db *sqlx.DB
+
+var (
+	sheets []Sheet
+)
 
 func main() {
 	dsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?parseTime=true&charset=utf8mb4",
@@ -317,9 +319,15 @@ func main() {
 	)
 
 	var err error
-	db, err = sql.Open("mysql", dsn)
+	db, err = sqlx.Open("mysql", dsn)
 	if err != nil {
 		log.Fatal(err)
+	}
+
+	sheets = []Sheet{}
+
+	if masterErr := db.Select(&sheets, "SELECT * FROM sheets ORDER BY `rank`, num"); masterErr != nil {
+		return // error handling
 	}
 
 	e := echo.New()
@@ -420,6 +428,25 @@ func main() {
 			return err
 		}
 		defer rows.Close()
+
+		/////////////////////////////////////////////////
+
+		var reservations []Reservation
+		var sheets []Sheet
+
+		for rows.Next() {
+			var reservation Reservation
+			var sheet Sheet
+
+			if err := rows.Scan(&reservation.ID, &reservation.EventID, &reservation.SheetID, &reservation.UserID, &reservation.ReservedAt, &reservation.CanceledAt, &sheet.Rank, &sheet.Num); err != nil {
+				return err
+			}
+
+			reservations = append(reservations, reservation)
+			sheets = append(sheets, sheet)
+		}
+
+		/////////////////////////////////////////////////
 
 		var recentReservations []Reservation
 		for rows.Next() {
