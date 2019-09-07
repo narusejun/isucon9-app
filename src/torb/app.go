@@ -898,6 +898,8 @@ func main() {
 			return resError(c, "not_found", 404)
 		}
 
+		time.Sleep(2 * time.Second)
+
 		event, err := getEvent(eventID, -1)
 		if err != nil {
 			return err
