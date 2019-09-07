@@ -18,8 +18,6 @@ import (
 
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/gorilla/sessions"
-	"github.com/jmoiron/sqlx"
-	_ "github.com/jmoiron/sqlx"
 	"github.com/labstack/echo"
 	"github.com/labstack/echo-contrib/session"
 	"github.com/labstack/echo/middleware"
@@ -53,7 +51,7 @@ type Sheets struct {
 
 type Sheet struct {
 	ID    int64  `json:"-" db:"id"`
-	Rank  string `json:"-" db:"rand"`
+	Rank  string `json:"-" db:"rank"`
 	Num   int64  `json:"num" db:"num"`
 	Price int64  `json:"-" db:"price"`
 
@@ -305,7 +303,7 @@ func (r *Renderer) Render(w io.Writer, name string, data interface{}, c echo.Con
 	return r.templates.ExecuteTemplate(w, name, data)
 }
 
-var db *sqlx.DB
+var db *sql.DB
 
 var (
 	sheets []Sheet
@@ -319,15 +317,28 @@ func main() {
 	)
 
 	var err error
-	db, err = sqlx.Open("mysql", dsn)
+	db, err = sql.Open("mysql", dsn)
 	if err != nil {
 		log.Fatal(err)
 	}
 
+	rows, err := db.Query("SELECT * FROM sheets ORDER BY `rank`, num")
+	if err != nil {
+		panic(err)
+	}
+
 	sheets = []Sheet{}
 
-	if masterErr := db.Select(&sheets, "SELECT * FROM sheets ORDER BY `rank`, num"); masterErr != nil {
-		return // error handling
+	for rows.Next() {
+		sheet := Sheet{}
+		if err = rows.Scan(sheet.ID, sheet.Rank, sheet.Num, sheet.Price); err != nil {
+			panic(err)
+		}
+		sheets = append(sheets, sheet)
+	}
+
+	for _, sheet := range sheets {
+		log.Println(sheet)
 	}
 
 	e := echo.New()
@@ -428,25 +439,6 @@ func main() {
 			return err
 		}
 		defer rows.Close()
-
-		/////////////////////////////////////////////////
-
-		var reservations []Reservation
-		var sheets []Sheet
-
-		for rows.Next() {
-			var reservation Reservation
-			var sheet Sheet
-
-			if err := rows.Scan(&reservation.ID, &reservation.EventID, &reservation.SheetID, &reservation.UserID, &reservation.ReservedAt, &reservation.CanceledAt, &sheet.Rank, &sheet.Num); err != nil {
-				return err
-			}
-
-			reservations = append(reservations, reservation)
-			sheets = append(sheets, sheet)
-		}
-
-		/////////////////////////////////////////////////
 
 		var recentReservations []Reservation
 		for rows.Next() {
