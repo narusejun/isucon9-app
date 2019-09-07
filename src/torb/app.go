@@ -331,7 +331,7 @@ func main() {
 
 	for rows.Next() {
 		sheet := Sheet{}
-		if err = rows.Scan(sheet.ID, sheet.Rank, sheet.Num, sheet.Price); err != nil {
+		if err = rows.Scan(&sheet.ID, &sheet.Rank, &sheet.Num, &sheet.Price); err != nil {
 			panic(err)
 		}
 		sheets = append(sheets, sheet)
