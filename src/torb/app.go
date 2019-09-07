@@ -242,26 +242,51 @@ func getEvent(eventID, loginUserID int64) (*Event, error) {
 	}
 	defer rows.Close()
 
+	rows, err = db.Query("SELECT * FROM reservations WHERE event_id = ? AND canceled_at IS NULL", event.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	sheetId2Reservation := map[int64]Reservation{} // sheet_id to reservation, where reserved_at = MIN(reserved_at)
+
+	// make valid map
 	for rows.Next() {
-		var sheet Sheet
-		if err := rows.Scan(&sheet.ID, &sheet.Rank, &sheet.Num, &sheet.Price); err != nil {
+		var reservation Reservation
+		reservation = Reservation{}
+		err = rows.Scan(&reservation.ID, &reservation.EventID, &reservation.SheetID, &reservation.UserID, &reservation.ReservedAt, &reservation.CanceledAt)
+
+		if err != nil {
+			log.Println(err)
 			return nil, err
 		}
+
+		key := reservation.SheetID
+
+		cur, ok := sheetId2Reservation[key]
+		if ok {
+			if reservation.ReservedAt.Before(*cur.ReservedAt) {
+				sheetId2Reservation[key] = reservation
+			}
+		} else {
+			sheetId2Reservation[key] = reservation
+		}
+	}
+
+	for _, tmp := range sheets {
+		sheet := tmp
 		event.Sheets[sheet.Rank].Price = event.Price + sheet.Price
 		event.Total++
 		event.Sheets[sheet.Rank].Total++
 
-		var reservation Reservation
-		err := db.QueryRow("SELECT * FROM reservations WHERE event_id = ? AND sheet_id = ? AND canceled_at IS NULL GROUP BY event_id, sheet_id HAVING reserved_at = MIN(reserved_at)", event.ID, sheet.ID).Scan(&reservation.ID, &reservation.EventID, &reservation.SheetID, &reservation.UserID, &reservation.ReservedAt, &reservation.CanceledAt)
-		if err == nil {
-			sheet.Mine = reservation.UserID == loginUserID
+		// err := db.QueryRow("SELECT * FROM reservations WHERE event_id = ? AND sheet_id = ? AND canceled_at IS NULL GROUP BY event_id, sheet_id HAVING reserved_at = MIN(reserved_at)", event.ID, sheet.ID).Scan(&reservation.ID, &reservation.EventID, &reservation.SheetID, &reservation.UserID, &reservation.ReservedAt, &reservation.CanceledAt)
+
+		if v, ok := sheetId2Reservation[sheet.ID]; ok {
+			sheet.Mine = v.UserID == loginUserID
 			sheet.Reserved = true
-			sheet.ReservedAtUnix = reservation.ReservedAt.Unix()
-		} else if err == sql.ErrNoRows {
+			sheet.ReservedAtUnix = v.ReservedAt.Unix()
+		} else {
 			event.Remains++
 			event.Sheets[sheet.Rank].Remains++
-		} else {
-			return nil, err
 		}
 
 		event.Sheets[sheet.Rank].Detail = append(event.Sheets[sheet.Rank].Detail, &sheet)
@@ -312,6 +337,10 @@ func (r *Renderer) Render(w io.Writer, name string, data interface{}, c echo.Con
 
 var db *sql.DB
 
+var (
+	sheets []Sheet
+)
+
 func main() {
 	go func() {
 		log.Println(http.ListenAndServe(":6060", nil))
@@ -327,6 +356,21 @@ func main() {
 	db, err = sql.Open("mysql", dsn)
 	if err != nil {
 		log.Fatal(err)
+	}
+
+	rows, err := db.Query("SELECT * FROM sheets ORDER BY `rank`, num")
+	if err != nil {
+		panic(err)
+	}
+
+	sheets = []Sheet{}
+
+	for rows.Next() {
+		sheet := Sheet{}
+		if err = rows.Scan(&sheet.ID, &sheet.Rank, &sheet.Num, &sheet.Price); err != nil {
+			panic(err)
+		}
+		sheets = append(sheets, sheet)
 	}
 
 	e := echo.New()
