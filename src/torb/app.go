@@ -50,10 +50,10 @@ type Sheets struct {
 }
 
 type Sheet struct {
-	ID    int64  `json:"-" db:"id"`
-	Rank  string `json:"-" db:"rank"`
-	Num   int64  `json:"num" db:"num"`
-	Price int64  `json:"-" db:"price"`
+	ID    int64  `json:"-"`
+	Rank  string `json:"-"`
+	Num   int64  `json:"num"`
+	Price int64  `json:"-"`
 
 	Mine           bool       `json:"mine,omitempty"`
 	Reserved       bool       `json:"reserved,omitempty"`
@@ -233,11 +233,11 @@ func getEvent(eventID, loginUserID int64) (*Event, error) {
 		"C": &Sheets{},
 	}
 
-	rows, err := db.Query("SELECT * FROM sheets ORDER BY `rank`, num")
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
+	// rows, err := db.Query("SELECT * FROM sheets ORDER BY `rank`, num")
+	// if err != nil {
+	// 	return nil, err
+	// }
+	// defer rows.Close()
 
 	for _, sheet := range sheets {
 		event.Sheets[sheet.Rank].Price = event.Price + sheet.Price
