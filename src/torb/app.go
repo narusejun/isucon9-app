@@ -233,13 +233,14 @@ func getEvent(eventID, loginUserID int64) (*Event, error) {
 		"C": &Sheets{},
 	}
 
-	// rows, err := db.Query("SELECT * FROM sheets ORDER BY `rank`, num")
-	// if err != nil {
-	// 	return nil, err
-	// }
-	// defer rows.Close()
+	rows, err := db.Query("SELECT * FROM sheets ORDER BY `rank`, num")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
 
-	for _, sheet := range sheets {
+	for _, tmp := range sheets {
+		sheet := tmp
 		event.Sheets[sheet.Rank].Price = event.Price + sheet.Price
 		event.Total++
 		event.Sheets[sheet.Rank].Total++
@@ -335,10 +336,6 @@ func main() {
 			panic(err)
 		}
 		sheets = append(sheets, sheet)
-	}
-
-	for _, sheet := range sheets {
-		log.Println(sheet)
 	}
 
 	e := echo.New()
