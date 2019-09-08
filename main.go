@@ -956,11 +956,15 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 				category.id,
 				category.parent_id,
 				category.category_name,
-				parent_category.category_name
+				parent_category.category_name,
+				buyer.id,
+				buyer.account_name,
+				buyer.num_sell_items
 			FROM items
 			LEFT JOIN users AS seller ON seller.id = items.seller_id
 			LEFT JOIN categories AS category ON category.id = items.category_id
 			LEFT JOIN categories AS parent_category ON parent_category.id = category.parent_id
+			LEFT JOIN users AS buyer ON seller.id = items.buyer_id
 			WHERE (items.seller_id = ? OR items.buyer_id = ?)
 			AND items.status IN (?,?,?,?,?)
 			AND (items.created_at < ?  OR (items.created_at <= ? AND items.id < ?))
@@ -1004,11 +1008,15 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 				category.id,
 				category.parent_id,
 				category.category_name,
-				parent_category.category_name
+				parent_category.category_name,
+				buyer.id,
+				buyer.account_name,
+				buyer.num_sell_items
 			FROM items
 			LEFT JOIN users AS seller ON seller.id = items.seller_id
 			LEFT JOIN categories AS category ON category.id = items.category_id
 			LEFT JOIN categories AS parent_category ON parent_category.id = category.parent_id
+			LEFT JOIN users AS buyer ON seller.id = items.buyer_id
 			WHERE (items.seller_id = ? OR items.buyer_id = ?)
 			AND items.status IN (?,?,?,?,?)
 			ORDER BY items.created_at DESC, items.id DESC LIMIT ?
@@ -1035,6 +1043,7 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 		itemDetail := &ItemDetail{
 			Seller:   &UserSimple{},
 			Category: &Category{},
+			Buyer:    &UserSimple{},
 		}
 		var createdAt time.Time
 
@@ -1056,6 +1065,9 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 			&itemDetail.Category.ParentID,
 			&itemDetail.Category.CategoryName,
 			&itemDetail.Category.ParentCategoryName,
+			&itemDetail.Buyer.ID,
+			&itemDetail.Buyer.AccountName,
+			&itemDetail.Buyer.NumSellItems,
 		)
 		if err != nil {
 			outputErrorMsg(w, http.StatusInternalServerError, err.Error())
@@ -1064,21 +1076,15 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 		}
 
 		itemDetail.CreatedAt = createdAt.Unix()
+		if itemDetail.BuyerID == 0 {
+			itemDetail.Buyer = nil
+		}
+
 		itemDetails = append(itemDetails, itemDetail)
 	}
 	rows.Close()
 
 	for _, itemDetail := range itemDetails {
-		if itemDetail.BuyerID != 0 {
-			buyer, err := getUserSimpleByID(tx, itemDetail.BuyerID)
-			if err != nil {
-				outputErrorMsg(w, http.StatusNotFound, "buyer not found")
-				tx.Rollback()
-				return
-			}
-			itemDetail.Buyer = &buyer
-		}
-
 		transactionEvidence := TransactionEvidence{}
 		err = tx.Get(&transactionEvidence, "SELECT * FROM `transaction_evidences` WHERE `item_id` = ?", itemDetail.ID)
 		if err != nil && err != sql.ErrNoRows {
