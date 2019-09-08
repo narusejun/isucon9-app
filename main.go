@@ -940,8 +940,6 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 			LEFT JOIN users AS seller ON seller.id = items.seller_id
 			LEFT JOIN categories AS category ON category.id = items.category_id
 			LEFT JOIN categories AS parent_category ON parent_category.id = category.parent_id
-			FROM items
-			LEFT JOIN users AS seller ON seller.id = items.seller_id
 			WHERE (items.seller_id = ? OR items.buyer_id = ?)
 			AND items.status IN (?,?,?,?,?)
 			AND (items.created_at < ?  OR (items.created_at <= ? AND items.id < ?))
