@@ -1506,6 +1506,7 @@ func postBuy(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		chScr <- scr
+		chErr <- 0
 	}()
 
 	go func() {
@@ -1535,16 +1536,27 @@ func postBuy(w http.ResponseWriter, r *http.Request) {
 			chErr <- http.StatusBadRequest
 			return
 		}
+		chErr <- 0
 	}()
 
 	var scr *APIShipmentCreateRes
-	select {
-	case errStatus := <-chErr:
-		outputErrorMsg(w, errStatus, "なんかエラー")
-		tx.Rollback()
-		return
-	case scr = <-chScr:
-		break
+	apiCount := 2
+	for {
+		if apiCount == 0 {
+			break
+		}
+		select {
+		case errStatus := <-chErr:
+			if errStatus == 0 {
+				apiCount--
+				continue
+			}
+			outputErrorMsg(w, errStatus, "なんかエラー")
+			tx.Rollback()
+			return
+		case scr = <-chScr:
+			break
+		}
 	}
 
 	_, err = tx.Exec("INSERT INTO `shippings` (`transaction_evidence_id`, `status`, `item_name`, `item_id`, `reserve_id`, `reserve_time`, `to_address`, `to_name`, `from_address`, `from_name`, `img_binary`) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
