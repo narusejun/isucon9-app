@@ -886,10 +886,7 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 					items.category_id,
 					items.created_at,
 					seller.id,
-					seller.num_sell_items,
-					category.id,
-					category.parent_id,
-					category.category_name
+					category.id
 				FROM items
 				LEFT JOIN users AS seller ON seller.id = items.seller_id
 				LEFT JOIN categories AS category ON category.id = items.category_id
@@ -932,10 +929,7 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 					items.category_id,
 					items.created_at,
 					seller.id,
-					seller.num_sell_items,
-					category.id,
-					category.parent_id,
-					category.category_name
+					category.id
 				FROM items
 				LEFT JOIN users AS seller ON seller.id = items.seller_id
 				LEFT JOIN categories AS category ON category.id = items.category_id
