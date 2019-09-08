@@ -1537,6 +1537,7 @@ func postBuy(w http.ResponseWriter, r *http.Request) {
 	var scr *APIShipmentCreateRes
 	select {
 	case errMsg := <-chErr:
+		log.Println("era-:", errMsg)
 		outputErrorMsg(w, http.StatusInternalServerError, errMsg)
 		tx.Rollback()
 		return
