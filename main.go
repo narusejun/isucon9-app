@@ -1397,37 +1397,26 @@ func postBuy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, loaded := lock.LoadOrStore(rb.ItemID, rb.ItemID)
-	if loaded {
-		time.Sleep(60 * time.Second)
-		outputErrorMsg(w, http.StatusTeapot, "お茶")
-		return
-	}
-
 	targetItem := Item{}
 	err = dbx.Get(&targetItem, "SELECT * FROM `items` WHERE `id` = ?", rb.ItemID)
 	if err == sql.ErrNoRows {
 		outputErrorMsg(w, http.StatusNotFound, "item not found")
-		lock.Delete(rb.ItemID)
 		return
 	}
 	if err != nil {
 		log.Print(err)
 
 		outputErrorMsg(w, http.StatusInternalServerError, "db error")
-		lock.Delete(rb.ItemID)
 		return
 	}
 
 	if targetItem.Status != ItemStatusOnSale {
 		outputErrorMsg(w, http.StatusForbidden, "item is not for sale")
-		lock.Delete(rb.ItemID)
 		return
 	}
 
 	if targetItem.SellerID == buyer.ID {
 		outputErrorMsg(w, http.StatusForbidden, "自分の商品は買えません")
-		lock.Delete(rb.ItemID)
 		return
 	}
 
@@ -1435,14 +1424,12 @@ func postBuy(w http.ResponseWriter, r *http.Request) {
 	err = dbx.Get(&seller, "SELECT * FROM `users` WHERE `id` = ?", targetItem.SellerID)
 	if err == sql.ErrNoRows {
 		outputErrorMsg(w, http.StatusNotFound, "seller not found")
-		lock.Delete(rb.ItemID)
 		return
 	}
 	if err != nil {
 		log.Print(err)
 
 		outputErrorMsg(w, http.StatusInternalServerError, "db error")
-		lock.Delete(rb.ItemID)
 		return
 	}
 
@@ -1451,7 +1438,13 @@ func postBuy(w http.ResponseWriter, r *http.Request) {
 		log.Print(err)
 
 		outputErrorMsg(w, http.StatusInternalServerError, "category id error")
-		lock.Delete(rb.ItemID)
+		return
+	}
+
+	_, loaded := lock.LoadOrStore(rb.ItemID, rb.ItemID)
+	if loaded {
+		time.Sleep(60 * time.Second)
+		outputErrorMsg(w, http.StatusTeapot, "お茶")
 		return
 	}
 
