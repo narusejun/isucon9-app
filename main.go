@@ -952,7 +952,15 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 				items.created_at,
 				seller.id,
 				seller.account_name,
-				seller.num_sell_items
+				seller.num_sell_items,
+				category.id,
+				category.parent_id,
+				category.category_name,
+				parent_category.category_name
+			FROM items
+			LEFT JOIN users AS seller ON seller.id = items.seller_id
+			LEFT JOIN categories AS category ON category.id = items.category_id
+			LEFT JOIN categories AS parent_category ON parent_category.id = category.parent_id
 			FROM items
 			LEFT JOIN users AS seller ON seller.id = items.seller_id
 			WHERE (items.seller_id = ? OR items.buyer_id = ?)
@@ -994,9 +1002,15 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 				items.created_at,
 				seller.id,
 				seller.account_name,
-				seller.num_sell_items
+				seller.num_sell_items,
+				category.id,
+				category.parent_id,
+				category.category_name,
+				parent_category.category_name
 			FROM items
 			LEFT JOIN users AS seller ON seller.id = items.seller_id
+			LEFT JOIN categories AS category ON category.id = items.category_id
+			LEFT JOIN categories AS parent_category ON parent_category.id = category.parent_id
 			WHERE (items.seller_id = ? OR items.buyer_id = ?)
 			AND items.status IN (?,?,?,?,?)
 			ORDER BY items.created_at DESC, items.id DESC LIMIT ?
@@ -1021,7 +1035,8 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 	itemDetails := []*ItemDetail{}
 	for rows.Next() {
 		itemDetail := &ItemDetail{
-			Seller: &UserSimple{},
+			Seller:   &UserSimple{},
+			Category: &Category{},
 		}
 		var createdAt time.Time
 
@@ -1039,6 +1054,10 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 			&itemDetail.Seller.ID,
 			&itemDetail.Seller.AccountName,
 			&itemDetail.Seller.NumSellItems,
+			&itemDetail.Category.ID,
+			&itemDetail.Category.ParentID,
+			&itemDetail.Category.CategoryName,
+			&itemDetail.Category.ParentCategoryName,
 		)
 		if err != nil {
 			outputErrorMsg(w, http.StatusInternalServerError, err.Error())
@@ -1052,14 +1071,6 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 	rows.Close()
 
 	for _, itemDetail := range itemDetails {
-		category, err := getCategoryByID(tx, itemDetail.CategoryID)
-		if err != nil {
-			outputErrorMsg(w, http.StatusNotFound, "category not found")
-			tx.Rollback()
-			return
-		}
-		itemDetail.Category = &category
-
 		if itemDetail.BuyerID != 0 {
 			buyer, err := getUserSimpleByID(tx, itemDetail.BuyerID)
 			if err != nil {
