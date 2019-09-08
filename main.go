@@ -1,6 +1,8 @@
 package main
 
 import (
+	"bytes"
+	"crypto/md5"
 	crand "crypto/rand"
 	"database/sql"
 	"encoding/json"
@@ -2327,8 +2329,8 @@ func postLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = bcrypt.CompareHashAndPassword(u.HashedPassword, []byte(password))
-	if err == bcrypt.ErrMismatchedHashAndPassword {
+	check := CheckPassword(u.HashedPassword, []byte(password))
+	if check {
 		outputErrorMsg(w, http.StatusUnauthorized, "アカウント名かパスワードが間違えています")
 		return
 	}
@@ -2354,6 +2356,18 @@ func postLogin(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(u)
 }
 
+// md5 でハッシュ化したパスワードとハッシュ値が等しいか確認して，等しくなければ bcrypt にfallbackして確認する
+func CheckPassword(hashed []byte, passwd []byte) bool {
+	if md5hashed := md5.Sum(passwd); len(hashed) == 16 && bytes.Equal(hashed, md5hashed[:]) {
+		return true
+	}
+	err := bcrypt.CompareHashAndPassword(hashed, passwd)
+	if err != nil {
+		return false
+	}
+	return true
+}
+
 func postRegister(w http.ResponseWriter, r *http.Request) {
 	rr := reqRegister{}
 	err := json.NewDecoder(r.Body).Decode(&rr)
@@ -2372,13 +2386,7 @@ func postRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), BcryptCost)
-	if err != nil {
-		log.Print(err)
-
-		outputErrorMsg(w, http.StatusInternalServerError, "error")
-		return
-	}
+	hashedPassword := md5.Sum([]byte(password))
 
 	result, err := dbx.Exec("INSERT INTO `users` (`account_name`, `hashed_password`, `address`) VALUES (?, ?, ?)",
 		accountName,
