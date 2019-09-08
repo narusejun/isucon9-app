@@ -9,6 +9,7 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"net/http/pprof"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -320,6 +321,18 @@ func main() {
 	defer dbx.Close()
 
 	mux := goji.NewMux()
+
+	// -----pprof----
+	//mux.HandleFunc(pat.Get("/debug/pprof/*"), http.HandlerFunc(pprof.Index))
+	mux.HandleFunc(pat.Get("/debug/pprof/"), pprof.Index)
+	mux.HandleFunc(pat.Get("/debug/pprof/cmdline"), pprof.Cmdline)
+	mux.HandleFunc(pat.Get("/debug/pprof/profile"), pprof.Profile)
+	mux.HandleFunc(pat.Get("/debug/pprof/symbol"), pprof.Symbol)
+	mux.HandleFunc(pat.Get("/debug/pprof/block"), pprof.Handler("block").ServeHTTP)
+	mux.HandleFunc(pat.Get("/debug/pprof/heap"), pprof.Handler("heap").ServeHTTP)
+	mux.HandleFunc(pat.Get("/debug/pprof/goroutine"), pprof.Handler("goroutine").ServeHTTP)
+	mux.HandleFunc(pat.Get("/debug/pprof/threadcreate"), pprof.Handler("threadcreate").ServeHTTP)
+	// ----/pprof----
 
 	// API
 	mux.HandleFunc(pat.Post("/initialize"), postInitialize)
