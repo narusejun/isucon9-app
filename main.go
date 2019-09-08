@@ -469,11 +469,11 @@ var (
 )
 
 func prepareConfig() {
-	getConfigByName("payment_service_url")
-	getConfigByName("shipment_service_url")
-
 	name2config = map[string]string{}
 	name2error = map[string]error{}
+
+	getConfigByName("payment_service_url")
+	getConfigByName("shipment_service_url")
 }
 
 func getConfigByName(name string) (string, error) {
