@@ -1411,11 +1411,13 @@ func postBuy(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if targetItem.Status != ItemStatusOnSale {
+		log.Printf("NOTFORSALE: %v", targetItem)
 		outputErrorMsg(w, http.StatusForbidden, "item is not for sale")
 		return
 	}
 
 	if targetItem.SellerID == buyer.ID {
+		log.Printf("MYITEM: %v", targetItem)
 		outputErrorMsg(w, http.StatusForbidden, "自分の商品は買えません")
 		return
 	}
