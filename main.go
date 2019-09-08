@@ -114,22 +114,22 @@ type ItemSimple struct {
 }
 
 type ItemDetail struct {
-	ID                        int64       `json:"id"`
-	SellerID                  int64       `json:"seller_id"`
-	Seller                    *UserSimple `json:"seller"`
-	BuyerID                   int64       `json:"buyer_id,omitempty"`
-	Buyer                     *UserSimple `json:"buyer,omitempty"`
-	Status                    string      `json:"status"`
-	Name                      string      `json:"name"`
-	Price                     int         `json:"price"`
-	Description               string      `json:"description"`
-	ImageURL                  string      `json:"image_url"`
-	CategoryID                int         `json:"category_id"`
-	Category                  *Category   `json:"category"`
-	TransactionEvidenceID     int64       `json:"transaction_evidence_id,omitempty"`
-	TransactionEvidenceStatus string      `json:"transaction_evidence_status,omitempty"`
-	ShippingStatus            string      `json:"shipping_status,omitempty"`
-	CreatedAt                 int64       `json:"created_at"`
+	ID                        int64       `json:"id" db:"id"`
+	SellerID                  int64       `json:"seller_id" db:"seller_id"`
+	Seller                    *UserSimple `json:"seller" db:"seller"`
+	BuyerID                   int64       `json:"buyer_id,omitempty" db:"buyer_id"`
+	Buyer                     *UserSimple `json:"buyer,omitempty"` //TODO
+	Status                    string      `json:"status" db:"status"`
+	Name                      string      `json:"name" db:"name"`
+	Price                     int         `json:"price" db:"price"`
+	Description               string      `json:"description" db:"description"`
+	ImageURL                  string      `json:"image_url" db:"image_url"`
+	CategoryID                int         `json:"category_id" db:"category_id"`
+	Category                  *Category   `json:"category" db:"category"`
+	TransactionEvidenceID     int64       `json:"transaction_evidence_id,omitempty"`     //TODO
+	TransactionEvidenceStatus string      `json:"transaction_evidence_status,omitempty"` //TODO
+	ShippingStatus            string      `json:"shipping_status,omitempty"`             //TODO
+	CreatedAt                 int64       `json:"created_at" db:"created_at"`
 }
 
 type TransactionEvidence struct {
