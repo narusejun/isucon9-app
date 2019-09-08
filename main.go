@@ -450,7 +450,7 @@ func getConfigByName(name string) (string, error) {
 		return "", err
 	}
 
-	return config.Val, nil
+	return config.Val, err
 
 	// if v, ok := name2config[name]; ok {
 	// 	return v, nil
