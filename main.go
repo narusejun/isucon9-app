@@ -943,7 +943,7 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 			LEFT JOIN users AS seller ON seller.id = items.seller_id
 			LEFT JOIN categories AS category ON category.id = items.category_id
 			LEFT JOIN categories AS parent_category ON parent_category.id = category.parent_id
-			LEFT JOIN users AS buyer ON seller.id = items.buyer_id
+			LEFT JOIN users AS buyer ON buyer.id = items.buyer_id
 			WHERE (items.seller_id = ? OR items.buyer_id = ?)
 			AND items.status IN (?,?,?,?,?)
 			AND (items.created_at < ?  OR (items.created_at <= ? AND items.id < ?))
@@ -995,7 +995,7 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 			LEFT JOIN users AS seller ON seller.id = items.seller_id
 			LEFT JOIN categories AS category ON category.id = items.category_id
 			LEFT JOIN categories AS parent_category ON parent_category.id = category.parent_id
-			LEFT JOIN users AS buyer ON seller.id = items.buyer_id
+			LEFT JOIN users AS buyer ON buyer.id = items.buyer_id
 			WHERE (items.seller_id = ? OR items.buyer_id = ?)
 			AND items.status IN (?,?,?,?,?)
 			ORDER BY items.created_at DESC, items.id DESC LIMIT ?
