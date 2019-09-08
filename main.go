@@ -2369,7 +2369,7 @@ func postLogin(w http.ResponseWriter, r *http.Request) {
 // md5 でハッシュ化したパスワードとハッシュ値が等しいか確認して，等しくなければ bcrypt にfallbackして確認する
 func CheckPassword(hashed []byte, passwd []byte) (isValid bool, newHashed []byte) {
 	md5hashed := md5.Sum(passwd)
-	if len(hashed) == 16 && bytes.Equal(hashed, md5hashed[:]) {
+	if bytes.Equal(hashed, md5hashed[:]) {
 		return true, md5hashed[:]
 	}
 	err := bcrypt.CompareHashAndPassword(hashed, passwd)
