@@ -1490,7 +1490,7 @@ func postBuy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	chErr := make(chan string)
+	chErr := make(chan int)
 	chScr := make(chan *APIShipmentCreateRes)
 
 	go func() {
@@ -1501,8 +1501,8 @@ func postBuy(w http.ResponseWriter, r *http.Request) {
 			FromName:    seller.AccountName,
 		})
 		if err != nil {
-			log.Print(err)
-			chErr <- "failed to request to shipment service"
+			log.Print("failed to request to shipment service:", err)
+			chErr <- http.StatusInternalServerError
 			return
 		}
 		chScr <- scr
@@ -1516,29 +1516,31 @@ func postBuy(w http.ResponseWriter, r *http.Request) {
 			Price:  targetItem.Price,
 		})
 		if err != nil {
-			log.Print(err)
-			chErr <- "payment service is failed"
+			log.Print("payment service is failed:", err)
+			chErr <- http.StatusInternalServerError
 			return
 		}
 		if pstr.Status == "invalid" {
-			chErr <- "カード情報に誤りがあります"
+			log.Print("カード情報に誤りがあります")
+			chErr <- http.StatusBadRequest
 			return
 		}
 		if pstr.Status == "fail" {
-			chErr <- "カードの残高が足りません"
+			log.Print("カードの残高が足りません")
+			chErr <- http.StatusBadRequest
 			return
 		}
 		if pstr.Status != "ok" {
-			chErr <- "想定外のエラー"
+			log.Print("想定外のエラー")
+			chErr <- http.StatusBadRequest
 			return
 		}
 	}()
 
 	var scr *APIShipmentCreateRes
 	select {
-	case errMsg := <-chErr:
-		log.Println("era-:", errMsg)
-		outputErrorMsg(w, http.StatusInternalServerError, errMsg)
+	case errStatus := <-chErr:
+		outputErrorMsg(w, errStatus, "なんかエラー")
 		tx.Rollback()
 		return
 	case scr = <-chScr:
