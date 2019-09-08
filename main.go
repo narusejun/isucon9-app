@@ -936,9 +936,9 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 				category.parent_id,
 				category.category_name,
 				parent_category.category_name,
-				buyer.id,
-				buyer.account_name,
-				buyer.num_sell_items
+				IFNULL(buyer.id, 0),
+				IFNULL(buyer.account_name, ""),
+				IFNULL(buyer.num_sell_items, 0)
 			FROM items
 			LEFT JOIN users AS seller ON seller.id = items.seller_id
 			LEFT JOIN categories AS category ON category.id = items.category_id
@@ -988,9 +988,9 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 				category.parent_id,
 				category.category_name,
 				parent_category.category_name,
-				buyer.id,
-				buyer.account_name,
-				buyer.num_sell_items
+				IFNULL(buyer.id, 0),
+				IFNULL(buyer.account_name, ""),
+				IFNULL(buyer.num_sell_items, 0)
 			FROM items
 			LEFT JOIN users AS seller ON seller.id = items.seller_id
 			LEFT JOIN categories AS category ON category.id = items.category_id
