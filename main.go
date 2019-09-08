@@ -439,26 +439,39 @@ var (
 )
 
 func getConfigByName(name string) (string, error) {
-	if v, ok := name2config[name]; ok {
-		return v, nil
-	} else {
-		config := Config{}
-		err := dbx.Get(&config, "SELECT * FROM `configs` WHERE `name` = ?", name)
+	config := Config{}
+	err := dbx.Get(&config, "SELECT * FROM `configs` WHERE `name` = ?", name)
 
-		if err == sql.ErrNoRows {
-			name2config[name] = ""
-			return "", nil
-		}
-		if err != nil {
-			log.Print(err)
-			name2config[name] = ""
-			return "", err
-		}
-
-		name2config[name] = config.Val
-
-		return config.Val, nil
+	if err == sql.ErrNoRows {
+		return "", nil
 	}
+	if err != nil {
+		log.Print(err)
+		return "", err
+	}
+
+	return config.Val, nil
+
+	// if v, ok := name2config[name]; ok {
+	// 	return v, nil
+	// } else {
+	// 	config := Config{}
+	// 	err := dbx.Get(&config, "SELECT * FROM `configs` WHERE `name` = ?", name)
+
+	// 	if err == sql.ErrNoRows {
+	// 		name2config[name] = ""
+	// 		return "", nil
+	// 	}
+	// 	if err != nil {
+	// 		log.Print(err)
+	// 		name2config[name] = ""
+	// 		return "", err
+	// 	}
+
+	// 	name2config[name] = config.Val
+
+	// 	return config.Val, nil
+	// }
 }
 
 func getPaymentServiceURL() string {
