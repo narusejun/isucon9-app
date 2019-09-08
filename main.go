@@ -4,6 +4,7 @@ import (
 	crand "crypto/rand"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"html/template"
 	"io/ioutil"
@@ -325,6 +326,8 @@ func main() {
 
 	mux := goji.NewMux()
 
+	prepareCategory(dbx)
+
 	// -----pprof----
 	//mux.HandleFunc(pat.Get("/debug/pprof/*"), http.HandlerFunc(pprof.Index))
 	mux.HandleFunc(pat.Get("/debug/pprof/"), pprof.Index)
@@ -423,16 +426,44 @@ func getUserSimpleByID(q sqlx.Queryer, userID int64) (userSimple UserSimple, err
 	return userSimple, err
 }
 
-func getCategoryByID(q sqlx.Queryer, categoryID int) (category Category, err error) {
-	err = sqlx.Get(q, &category, "SELECT * FROM `categories` WHERE `id` = ?", categoryID)
-	if category.ParentID != 0 {
-		parentCategory, err := getCategoryByID(q, category.ParentID)
-		if err != nil {
-			return category, err
-		}
-		category.ParentCategoryName = parentCategory.CategoryName
+var (
+	categoryId2category map[int]Category
+	cachedCategories    []Category
+)
+
+func prepareCategory(q sqlx.Queryer) {
+	categoryId2category = map[int]Category{}
+	cachedCategories := []Category{}
+
+	sqlx.Select(q, &cachedCategories, "SELECT * FROM `categories`")
+
+	for _, cat := range cachedCategories {
+		categoryId2category[cat.ID] = cat
 	}
-	return category, err
+}
+
+func getCategoryByID(q sqlx.Queryer, categoryID int) (Category, error) {
+	v, ok := categoryId2category[categoryID]
+
+	if ok && v.ParentID != 0 {
+		parentCategory, err := getCategoryByID(q, v.ParentID)
+		if err != nil {
+			return v, err
+		}
+		v.ParentCategoryName = parentCategory.CategoryName
+
+		return v, nil
+	}
+
+	if ok && v.ParentID == 0 {
+		return v, nil
+	}
+
+	if !ok {
+		return Category{}, errors.New("hoge")
+	}
+
+	return v, nil
 }
 
 var (
