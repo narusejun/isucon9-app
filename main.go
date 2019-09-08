@@ -284,8 +284,6 @@ func main() {
 	name2config = map[string]string{}
 	name2error = map[string]error{}
 
-	categoryId2category = map[int]Category{}
-
 	host := os.Getenv("MYSQL_HOST")
 	if host == "" {
 		host = "127.0.0.1"
@@ -327,6 +325,8 @@ func main() {
 	defer dbx.Close()
 
 	mux := goji.NewMux()
+
+	prepareCategory(dbx)
 
 	// -----pprof----
 	//mux.HandleFunc(pat.Get("/debug/pprof/*"), http.HandlerFunc(pprof.Index))
@@ -428,51 +428,42 @@ func getUserSimpleByID(q sqlx.Queryer, userID int64) (userSimple UserSimple, err
 
 var (
 	categoryId2category map[int]Category
+	cachedCategories    []Category
 )
 
-func getCategoryByID(q sqlx.Queryer, categoryID int) (Category, error) {
-	categories := []Category{}
+func prepareCategory(q sqlx.Queryer) {
+	categoryId2category = map[int]Category{}
+	cachedCategories := []Category{}
 
-	err := sqlx.Select(q, &categories, "SELECT * FROM `categories`")
+	sqlx.Select(q, &cachedCategories, "SELECT * FROM `categories`")
 
-	if err != nil {
-		return Category{}, errors.New("(*>△<)<ナーンナーンっっ")
-	}
-
-	for _, cat := range categories {
+	for _, cat := range cachedCategories {
 		categoryId2category[cat.ID] = cat
 	}
+}
 
-	if targetCat, ok := categoryId2category[categoryID]; ok {
-		catptr := &targetCat
-		for {
-			if catptr.ParentID == 0 {
-				break
-			}
+func getCategoryByID(q sqlx.Queryer, categoryID int) (Category, error) {
+	v, ok := categoryId2category[categoryID]
 
-			if v, ok := categoryId2category[catptr.ParentID]; ok {
-				catptr.ParentCategoryName = v.CategoryName
-				catptr = &v
-			} else {
-				return v, errors.New("(*>△<)<ナーンナーンっっ")
-			}
+	if ok && v.ParentID != 0 {
+		parentCategory, err := getCategoryByID(q, v.ParentID)
+		if err != nil {
+			return v, err
 		}
+		v.ParentCategoryName = parentCategory.CategoryName
 
-		return targetCat, nil
-
-	} else {
-		return targetCat, errors.New("(*>△<)<ナーンナーンっっ")
+		return v, nil
 	}
 
-	// err = sqlx.Get(q, &category, "SELECT * FROM `categories` WHERE `id` = ?", categoryID)
-	// if category.ParentID != 0 {
-	// 	parentCategory, err := getCategoryByID(q, category.ParentID)
-	// 	if err != nil {
-	// 		return category, err
-	// 	}
-	// 	category.ParentCategoryName = parentCategory.CategoryName
-	// }
-	// return category, err
+	if ok && v.ParentID == 0 {
+		return v, nil
+	}
+
+	if !ok {
+		return Category{}, errors.New("hoge")
+	}
+
+	return v, nil
 }
 
 var (
