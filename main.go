@@ -938,12 +938,17 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 				parent_category.category_name,
 				IFNULL(buyer.id, 0),
 				IFNULL(buyer.account_name, ""),
-				IFNULL(buyer.num_sell_items, 0)
+				IFNULL(buyer.num_sell_items, 0),
+				IFNULL(transaction_evidences.id, 0),
+				IFNULL(transaction_evidences.status, ""),
+				IFNULL(shippings.status, "")
 			FROM items
 			LEFT JOIN users AS seller ON seller.id = items.seller_id
 			LEFT JOIN categories AS category ON category.id = items.category_id
 			LEFT JOIN categories AS parent_category ON parent_category.id = category.parent_id
 			LEFT JOIN users AS buyer ON buyer.id = items.buyer_id
+			LEFT JOIN transaction_evidences ON transaction_evidences.item_id = items.id
+			LEFT JOIN shippings ON shippings.transaction_evidence_id = transaction_evidences.id
 			WHERE (items.seller_id = ? OR items.buyer_id = ?)
 			AND items.status IN (?,?,?,?,?)
 			AND (items.created_at < ?  OR (items.created_at <= ? AND items.id < ?))
@@ -990,12 +995,17 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 				parent_category.category_name,
 				IFNULL(buyer.id, 0),
 				IFNULL(buyer.account_name, ""),
-				IFNULL(buyer.num_sell_items, 0)
+				IFNULL(buyer.num_sell_items, 0),
+				IFNULL(transaction_evidences.id, 0),
+				IFNULL(transaction_evidences.status, ""),
+				IFNULL(shippings.status, "")
 			FROM items
 			LEFT JOIN users AS seller ON seller.id = items.seller_id
 			LEFT JOIN categories AS category ON category.id = items.category_id
 			LEFT JOIN categories AS parent_category ON parent_category.id = category.parent_id
 			LEFT JOIN users AS buyer ON buyer.id = items.buyer_id
+			LEFT JOIN transaction_evidences ON transaction_evidences.item_id = items.id
+			LEFT JOIN shippings ON shippings.transaction_evidence_id = transaction_evidences.id
 			WHERE (items.seller_id = ? OR items.buyer_id = ?)
 			AND items.status IN (?,?,?,?,?)
 			ORDER BY items.created_at DESC, items.id DESC LIMIT ?
@@ -1047,6 +1057,9 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 			&itemDetail.Buyer.ID,
 			&itemDetail.Buyer.AccountName,
 			&itemDetail.Buyer.NumSellItems,
+			&itemDetail.TransactionEvidenceID,
+			&itemDetail.TransactionEvidenceStatus,
+			&itemDetail.ShippingStatus,
 		)
 		if err != nil {
 			outputErrorMsg(w, http.StatusInternalServerError, err.Error())
@@ -1062,47 +1075,6 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 		itemDetails = append(itemDetails, itemDetail)
 	}
 	rows.Close()
-
-	for _, itemDetail := range itemDetails {
-		transactionEvidence := TransactionEvidence{}
-		err = tx.Get(&transactionEvidence, "SELECT * FROM `transaction_evidences` WHERE `item_id` = ?", itemDetail.ID)
-		if err != nil && err != sql.ErrNoRows {
-			// It's able to ignore ErrNoRows
-			log.Print(err)
-			outputErrorMsg(w, http.StatusInternalServerError, "db error")
-			tx.Rollback()
-			return
-		}
-
-		if transactionEvidence.ID > 0 {
-			shipping := Shipping{}
-			err = tx.Get(&shipping, "SELECT * FROM `shippings` WHERE `transaction_evidence_id` = ?", transactionEvidence.ID)
-			if err == sql.ErrNoRows {
-				outputErrorMsg(w, http.StatusNotFound, "shipping not found")
-				tx.Rollback()
-				return
-			}
-			if err != nil {
-				log.Print(err)
-				outputErrorMsg(w, http.StatusInternalServerError, "db error")
-				tx.Rollback()
-				return
-			}
-			ssr, err := APIShipmentStatus(getShipmentServiceURL(), &APIShipmentStatusReq{
-				ReserveID: shipping.ReserveID,
-			})
-			if err != nil {
-				log.Print(err)
-				outputErrorMsg(w, http.StatusInternalServerError, "failed to request to shipment service")
-				tx.Rollback()
-				return
-			}
-
-			itemDetail.TransactionEvidenceID = transactionEvidence.ID
-			itemDetail.TransactionEvidenceStatus = transactionEvidence.Status
-			itemDetail.ShippingStatus = ssr.Status
-		}
-	}
 	tx.Commit()
 
 	hasNext := false
