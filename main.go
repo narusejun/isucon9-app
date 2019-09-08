@@ -281,9 +281,6 @@ func init() {
 }
 
 func main() {
-	name2config = map[string]string{}
-	name2error = map[string]error{}
-
 	host := os.Getenv("MYSQL_HOST")
 	if host == "" {
 		host = "127.0.0.1"
@@ -471,6 +468,14 @@ var (
 	name2error  map[string]error
 )
 
+func prepareConfig() {
+	getConfigByName("payment_service_url")
+	getConfigByName("shipment_service_url")
+
+	name2config = map[string]string{}
+	name2error = map[string]error{}
+}
+
 func getConfigByName(name string) (string, error) {
 	if v, ok := name2config[name]; ok {
 		return v, name2error[name]
@@ -565,6 +570,8 @@ func postInitialize(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json;charset=utf-8")
 	json.NewEncoder(w).Encode(res)
+
+	prepareConfig()
 }
 
 func getNewItems(w http.ResponseWriter, r *http.Request) {
