@@ -2299,6 +2299,14 @@ func getSettings(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(ress)
 }
 
+func updateUserPasswd(user *User, passwd []byte) {
+	_, err := dbx.Exec("UPDATE `users` SET hashed_password = ? WHERE `id` = ?", passwd, user.ID)
+	if err != nil {
+		log.Print(err)
+		return
+	}
+}
+
 func postLogin(w http.ResponseWriter, r *http.Request) {
 	rl := reqLogin{}
 	err := json.NewDecoder(r.Body).Decode(&rl)
@@ -2329,7 +2337,7 @@ func postLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	check := CheckPassword(u.HashedPassword, []byte(password))
+	check, hashed := CheckPassword(u.HashedPassword, []byte(password))
 	if !check {
 		outputErrorMsg(w, http.StatusUnauthorized, "アカウント名かパスワードが間違えています")
 		return
@@ -2340,6 +2348,8 @@ func postLogin(w http.ResponseWriter, r *http.Request) {
 		outputErrorMsg(w, http.StatusInternalServerError, "crypt error")
 		return
 	}
+
+	updateUserPasswd(&u, hashed)
 
 	session := getSession(r)
 
@@ -2357,15 +2367,16 @@ func postLogin(w http.ResponseWriter, r *http.Request) {
 }
 
 // md5 でハッシュ化したパスワードとハッシュ値が等しいか確認して，等しくなければ bcrypt にfallbackして確認する
-func CheckPassword(hashed []byte, passwd []byte) bool {
-	if md5hashed := md5.Sum(passwd); len(hashed) == 16 && bytes.Equal(hashed, md5hashed[:]) {
-		return true
+func CheckPassword(hashed []byte, passwd []byte) (isValid bool, newHashed []byte) {
+	md5hashed := md5.Sum(passwd)
+	if len(hashed) == 16 && bytes.Equal(hashed, md5hashed[:]) {
+		return true, md5hashed[:]
 	}
 	err := bcrypt.CompareHashAndPassword(hashed, passwd)
 	if err != nil {
-		return false
+		return false, make([]byte, 0, 0)
 	}
-	return true
+	return true, md5hashed[:]
 }
 
 func postRegister(w http.ResponseWriter, r *http.Request) {
