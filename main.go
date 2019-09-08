@@ -874,7 +874,24 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 		// paging
 		err := tx.Select(&itemDetails,
 			`
-				SELECT * FROM items
+				SELECT
+					items.id,
+					items.seller_id,
+					items.buyer_id,
+					items.status,
+					items.name,
+					items.price,
+					items.description,
+					items.CONCAT("/uploads/", items.image_name) AS image_url,
+					items.category_id,
+					items.created_at,
+					seller.id,
+					seller.account_name,
+					seller.num_sell_items,
+					category.id,
+					category.parent_id,
+					category.category_name
+				FROM items
 				LEFT JOIN users AS seller ON seller.id = items.seller_id
 				LEFT JOIN categories AS category ON category.id = items.category_id
 				WHERE (items.seller_id = ? OR items.buyer_id = ?)
@@ -904,7 +921,24 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 		// 1st page
 		err := tx.Select(&itemDetails,
 			`
-				SELECT * FROM items
+				SELECT
+					items.id,
+					items.seller_id,
+					items.buyer_id,
+					items.status,
+					items.name,
+					items.price,
+					items.description,
+					items.CONCAT("/uploads/", items.image_name) AS image_url,
+					items.category_id,
+					items.created_at,
+					seller.id,
+					seller.account_name,
+					seller.num_sell_items,
+					category.id,
+					category.parent_id,
+					category.category_name
+				FROM items
 				LEFT JOIN users AS seller ON seller.id = items.seller_id
 				LEFT JOIN categories AS category ON category.id = items.category_id
 				WHERE (items.seller_id = ? OR items.buyer_id = ?)
