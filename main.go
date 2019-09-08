@@ -463,43 +463,17 @@ func getCategoryByID(q sqlx.Queryer, categoryID int) (Category, error) {
 	return v, nil
 }
 
-var (
-	name2config map[string]string
-	name2error  map[string]error
-)
-
-func prepareConfig() {
-	name2config = map[string]string{}
-	name2error = map[string]error{}
-
-	getConfigByName("payment_service_url")
-	getConfigByName("shipment_service_url")
-}
-
 func getConfigByName(name string) (string, error) {
-	if v, ok := name2config[name]; ok {
-		return v, name2error[name]
-	} else {
-		config := Config{}
-		err := dbx.Get(&config, "SELECT * FROM `configs` WHERE `name` = ?", name)
-
-		if err == sql.ErrNoRows {
-			name2config[name] = ""
-			name2error[name] = nil
-			return "", nil
-		}
-		if err != nil {
-			log.Print(err)
-			name2config[name] = ""
-			name2error[name] = err
-			return "", err
-		}
-
-		name2config[name] = config.Val
-		name2error[name] = err
-
-		return config.Val, err
+	config := Config{}
+	err := dbx.Get(&config, "SELECT * FROM `configs` WHERE `name` = ?", name)
+	if err == sql.ErrNoRows {
+		return "", nil
 	}
+	if err != nil {
+		log.Print(err)
+		return "", err
+	}
+	return config.Val, err
 }
 
 func getPaymentServiceURL() string {
@@ -570,8 +544,6 @@ func postInitialize(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json;charset=utf-8")
 	json.NewEncoder(w).Encode(res)
-
-	prepareConfig()
 }
 
 func getNewItems(w http.ResponseWriter, r *http.Request) {
