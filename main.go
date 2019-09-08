@@ -463,6 +463,24 @@ func getCategoryByID(q sqlx.Queryer, categoryID int) (Category, error) {
 	return v, nil
 }
 
+var (
+	name2config map[string]string
+	name2error  map[string]error
+)
+
+func prepareConfig() {
+	name2config = map[string]string{}
+	name2error = map[string]error{}
+
+	getConfigByName("payment_service_url")
+	getConfigByName("shipment_service_url")
+}
+
+func clearConfigCache() {
+	name2config = make(map[string]string)
+	name2error = make(map[string]error)
+}
+
 func getConfigByName(name string) (string, error) {
 	config := Config{}
 	err := dbx.Get(&config, "SELECT * FROM `configs` WHERE `name` = ?", name)
@@ -498,6 +516,7 @@ func getIndex(w http.ResponseWriter, r *http.Request) {
 
 func postInitialize(w http.ResponseWriter, r *http.Request) {
 	ri := reqInitialize{}
+	clearConfigCache()
 
 	err := json.NewDecoder(r.Body).Decode(&ri)
 	if err != nil {
