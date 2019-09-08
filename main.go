@@ -280,6 +280,9 @@ func init() {
 }
 
 func main() {
+	// onMemoryConfig = Config{}
+	onMemoryConfigExist = false
+
 	host := os.Getenv("MYSQL_HOST")
 	if host == "" {
 		host = "127.0.0.1"
@@ -432,17 +435,26 @@ func getCategoryByID(q sqlx.Queryer, categoryID int) (category Category, err err
 	return category, err
 }
 
+var (
+	onMemoryConfig      Config
+	onMemoryConfigExist bool
+)
+
 func getConfigByName(name string) (string, error) {
-	config := Config{}
-	err := dbx.Get(&config, "SELECT * FROM `configs` WHERE `name` = ?", name)
-	if err == sql.ErrNoRows {
-		return "", nil
+	if !onMemoryConfigExist {
+		onMemoryConfig := Config{}
+		err := dbx.Get(&onMemoryConfig, "SELECT * FROM `configs` WHERE `name` = ?", name)
+		if err == sql.ErrNoRows {
+			return "", nil
+		}
+		if err != nil {
+			log.Print(err)
+			return "", err
+		}
+		onMemoryConfigExist = true
 	}
-	if err != nil {
-		log.Print(err)
-		return "", err
-	}
-	return config.Val, err
+
+	return onMemoryConfig.Val, nil
 }
 
 func getPaymentServiceURL() string {
