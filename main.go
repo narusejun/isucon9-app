@@ -2330,7 +2330,7 @@ func postLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	check := CheckPassword(u.HashedPassword, []byte(password))
-	if check {
+	if !check {
 		outputErrorMsg(w, http.StatusUnauthorized, "アカウント名かパスワードが間違えています")
 		return
 	}
