@@ -281,6 +281,7 @@ func init() {
 
 func main() {
 	name2config = map[string]string{}
+	name2error = map[string]error{}
 
 	host := os.Getenv("MYSQL_HOST")
 	if host == "" {
@@ -436,42 +437,33 @@ func getCategoryByID(q sqlx.Queryer, categoryID int) (category Category, err err
 
 var (
 	name2config map[string]string
+	name2error  map[string]error
 )
 
 func getConfigByName(name string) (string, error) {
-	config := Config{}
-	err := dbx.Get(&config, "SELECT * FROM `configs` WHERE `name` = ?", name)
+	if v, ok := name2config[name]; ok {
+		return v, name2error[name]
+	} else {
+		config := Config{}
+		err := dbx.Get(&config, "SELECT * FROM `configs` WHERE `name` = ?", name)
 
-	if err == sql.ErrNoRows {
-		return "", nil
+		if err == sql.ErrNoRows {
+			name2config[name] = ""
+			name2error[name] = nil
+			return "", nil
+		}
+		if err != nil {
+			log.Print(err)
+			name2config[name] = ""
+			name2error[name] = err
+			return "", err
+		}
+
+		name2config[name] = config.Val
+		name2error[name] = err
+
+		return config.Val, err
 	}
-	if err != nil {
-		log.Print(err)
-		return "", err
-	}
-
-	return config.Val, err
-
-	// if v, ok := name2config[name]; ok {
-	// 	return v, nil
-	// } else {
-	// 	config := Config{}
-	// 	err := dbx.Get(&config, "SELECT * FROM `configs` WHERE `name` = ?", name)
-
-	// 	if err == sql.ErrNoRows {
-	// 		name2config[name] = ""
-	// 		return "", nil
-	// 	}
-	// 	if err != nil {
-	// 		log.Print(err)
-	// 		name2config[name] = ""
-	// 		return "", err
-	// 	}
-
-	// 	name2config[name] = config.Val
-
-	// 	return config.Val, nil
-	// }
 }
 
 func getPaymentServiceURL() string {
