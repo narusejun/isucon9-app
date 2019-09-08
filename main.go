@@ -1490,50 +1490,73 @@ func postBuy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	scr, err := APIShipmentCreate(getShipmentServiceURL(), &APIShipmentCreateReq{
-		ToAddress:   buyer.Address,
-		ToName:      buyer.AccountName,
-		FromAddress: seller.Address,
-		FromName:    seller.AccountName,
-	})
-	if err != nil {
-		log.Print(err)
-		outputErrorMsg(w, http.StatusInternalServerError, "failed to request to shipment service")
-		tx.Rollback()
+	chErr := make(chan int)
+	chScr := make(chan *APIShipmentCreateRes)
 
-		return
-	}
+	go func() {
+		scr, err := APIShipmentCreate(getShipmentServiceURL(), &APIShipmentCreateReq{
+			ToAddress:   buyer.Address,
+			ToName:      buyer.AccountName,
+			FromAddress: seller.Address,
+			FromName:    seller.AccountName,
+		})
+		if err != nil {
+			log.Print("failed to request to shipment service:", err)
+			chErr <- http.StatusInternalServerError
+			return
+		}
+		chScr <- scr
+		chErr <- 0
+	}()
 
-	pstr, err := APIPaymentToken(getPaymentServiceURL(), &APIPaymentServiceTokenReq{
-		ShopID: PaymentServiceIsucariShopID,
-		Token:  rb.Token,
-		APIKey: PaymentServiceIsucariAPIKey,
-		Price:  targetItem.Price,
-	})
-	if err != nil {
-		log.Print(err)
+	go func() {
+		pstr, err := APIPaymentToken(getPaymentServiceURL(), &APIPaymentServiceTokenReq{
+			ShopID: PaymentServiceIsucariShopID,
+			Token:  rb.Token,
+			APIKey: PaymentServiceIsucariAPIKey,
+			Price:  targetItem.Price,
+		})
+		if err != nil {
+			log.Print("payment service is failed:", err)
+			chErr <- http.StatusInternalServerError
+			return
+		}
+		if pstr.Status == "invalid" {
+			log.Print("カード情報に誤りがあります")
+			chErr <- http.StatusBadRequest
+			return
+		}
+		if pstr.Status == "fail" {
+			log.Print("カードの残高が足りません")
+			chErr <- http.StatusBadRequest
+			return
+		}
+		if pstr.Status != "ok" {
+			log.Print("想定外のエラー")
+			chErr <- http.StatusBadRequest
+			return
+		}
+		chErr <- 0
+	}()
 
-		outputErrorMsg(w, http.StatusInternalServerError, "payment service is failed")
-		tx.Rollback()
-		return
-	}
-
-	if pstr.Status == "invalid" {
-		outputErrorMsg(w, http.StatusBadRequest, "カード情報に誤りがあります")
-		tx.Rollback()
-		return
-	}
-
-	if pstr.Status == "fail" {
-		outputErrorMsg(w, http.StatusBadRequest, "カードの残高が足りません")
-		tx.Rollback()
-		return
-	}
-
-	if pstr.Status != "ok" {
-		outputErrorMsg(w, http.StatusBadRequest, "想定外のエラー")
-		tx.Rollback()
-		return
+	var scr *APIShipmentCreateRes
+	apiCount := 2
+	for {
+		if apiCount == 0 {
+			break
+		}
+		select {
+		case errStatus := <-chErr:
+			if errStatus == 0 {
+				apiCount--
+				continue
+			}
+			outputErrorMsg(w, errStatus, "なんかエラー")
+			tx.Rollback()
+			return
+		case scr = <-chScr:
+			break
+		}
 	}
 
 	_, err = tx.Exec("INSERT INTO `shippings` (`transaction_evidence_id`, `status`, `item_name`, `item_id`, `reserve_id`, `reserve_time`, `to_address`, `to_name`, `from_address`, `from_name`, `img_binary`) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
