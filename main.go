@@ -4,6 +4,7 @@ import (
 	crand "crypto/rand"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"html/template"
 	"io/ioutil"
@@ -283,6 +284,8 @@ func main() {
 	name2config = map[string]string{}
 	name2error = map[string]error{}
 
+	categoryId2category = map[int]Category{}
+
 	host := os.Getenv("MYSQL_HOST")
 	if host == "" {
 		host = "127.0.0.1"
@@ -423,16 +426,53 @@ func getUserSimpleByID(q sqlx.Queryer, userID int64) (userSimple UserSimple, err
 	return userSimple, err
 }
 
-func getCategoryByID(q sqlx.Queryer, categoryID int) (category Category, err error) {
-	err = sqlx.Get(q, &category, "SELECT * FROM `categories` WHERE `id` = ?", categoryID)
-	if category.ParentID != 0 {
-		parentCategory, err := getCategoryByID(q, category.ParentID)
-		if err != nil {
-			return category, err
-		}
-		category.ParentCategoryName = parentCategory.CategoryName
+var (
+	categoryId2category map[int]Category
+)
+
+func getCategoryByID(q sqlx.Queryer, categoryID int) (Category, error) {
+	categories := []Category{}
+
+	err := sqlx.Select(q, &categories, "SELECT * FROM `categories`")
+
+	if err != nil {
+		return Category{}, errors.New("(*>△<)<ナーンナーンっっ")
 	}
-	return category, err
+
+	for _, cat := range categories {
+		categoryId2category[cat.ID] = cat
+	}
+
+	if targetCat, ok := categoryId2category[categoryID]; ok {
+		catptr := &targetCat
+		for {
+			if catptr.ParentID == 0 {
+				break
+			}
+
+			if v, ok := categoryId2category[catptr.ParentID]; ok {
+				catptr.ParentCategoryName = v.CategoryName
+				catptr = &v
+			} else {
+				return v, errors.New("(*>△<)<ナーンナーンっっ")
+			}
+		}
+
+		return targetCat, nil
+
+	} else {
+		return targetCat, errors.New("(*>△<)<ナーンナーンっっ")
+	}
+
+	// err = sqlx.Get(q, &category, "SELECT * FROM `categories` WHERE `id` = ?", categoryID)
+	// if category.ParentID != 0 {
+	// 	parentCategory, err := getCategoryByID(q, category.ParentID)
+	// 	if err != nil {
+	// 		return category, err
+	// 	}
+	// 	category.ParentCategoryName = parentCategory.CategoryName
+	// }
+	// return category, err
 }
 
 var (
