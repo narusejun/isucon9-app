@@ -196,8 +196,8 @@ type resUserItems struct {
 }
 
 type resTransactions struct {
-	HasNext bool         `json:"has_next"`
-	Items   []ItemDetail `json:"items"`
+	HasNext bool          `json:"has_next"`
+	Items   []*ItemDetail `json:"items"`
 }
 
 type reqRegister struct {
@@ -912,11 +912,33 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	tx := dbx.MustBegin()
-	items := []Item{}
+
+	var rows *sql.Rows
+
 	if itemID > 0 && createdAt > 0 {
 		// paging
-		err := tx.Select(&items,
-			"SELECT * FROM `items` WHERE (`seller_id` = ? OR `buyer_id` = ?) AND `status` IN (?,?,?,?,?) AND (`created_at` < ?  OR (`created_at` <= ? AND `id` < ?)) ORDER BY `created_at` DESC, `id` DESC LIMIT ?",
+		rows, err = tx.Query(`
+			SELECT
+				items.id,
+				items.seller_id,
+				items.buyer_id,
+				items.status,
+				items.name,
+				items.price,
+				items.description,
+				CONCAT("/uploads/", items.image_name) AS image_url,
+				items.category_id,
+				items.created_at,
+				seller.id,
+				seller.account_name,
+				seller.num_sell_items
+			FROM items
+			LEFT JOIN users AS seller ON seller.id = items.seller_id
+			WHERE (items.seller_id = ? OR items.buyer_id = ?)
+			AND items.status IN (?,?,?,?,?)
+			AND (items.created_at < ?  OR (items.created_at <= ? AND items.id < ?))
+			ORDER BY items.created_at DESC, items.id DESC LIMIT ?
+			`,
 			user.ID,
 			user.ID,
 			ItemStatusOnSale,
@@ -937,8 +959,27 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 		}
 	} else {
 		// 1st page
-		err := tx.Select(&items,
-			"SELECT * FROM `items` WHERE (`seller_id` = ? OR `buyer_id` = ?) AND `status` IN (?,?,?,?,?) ORDER BY `created_at` DESC, `id` DESC LIMIT ?",
+		rows, err = tx.Query(`
+			SELECT
+				items.id,
+				items.seller_id,
+				items.buyer_id,
+				items.status,
+				items.name,
+				items.price,
+				items.description,
+				CONCAT("/uploads/", items.image_name) AS image_url,
+				items.category_id,
+				items.created_at,
+				seller.id,
+				seller.account_name,
+				seller.num_sell_items
+			FROM items
+			LEFT JOIN users AS seller ON seller.id = items.seller_id
+			WHERE (items.seller_id = ? OR items.buyer_id = ?)
+			AND items.status IN (?,?,?,?,?)
+			ORDER BY items.created_at DESC, items.id DESC LIMIT ?
+			`,
 			user.ID,
 			user.ID,
 			ItemStatusOnSale,
@@ -956,53 +997,60 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	itemDetails := []ItemDetail{}
-	for _, item := range items {
-		seller, err := getUserSimpleByID(tx, item.SellerID)
+	itemDetails := []*ItemDetail{}
+	for rows.Next() {
+		itemDetail := &ItemDetail{
+			Seller: &UserSimple{},
+		}
+		var createdAt time.Time
+
+		err := rows.Scan(
+			&itemDetail.ID,
+			&itemDetail.SellerID,
+			&itemDetail.BuyerID,
+			&itemDetail.Status,
+			&itemDetail.Name,
+			&itemDetail.Price,
+			&itemDetail.Description,
+			&itemDetail.ImageURL,
+			&itemDetail.CategoryID,
+			&createdAt,
+			&itemDetail.Seller.ID,
+			&itemDetail.Seller.AccountName,
+			&itemDetail.Seller.NumSellItems,
+		)
 		if err != nil {
-			outputErrorMsg(w, http.StatusNotFound, "seller not found")
+			outputErrorMsg(w, http.StatusInternalServerError, err.Error())
 			tx.Rollback()
 			return
 		}
-		category, err := getCategoryByID(tx, item.CategoryID)
+
+		itemDetail.CreatedAt = createdAt.Unix()
+		itemDetails = append(itemDetails, itemDetail)
+	}
+	rows.Close()
+
+	for _, itemDetail := range itemDetails {
+		category, err := getCategoryByID(tx, itemDetail.CategoryID)
 		if err != nil {
 			outputErrorMsg(w, http.StatusNotFound, "category not found")
 			tx.Rollback()
 			return
 		}
+		itemDetail.Category = &category
 
-		itemDetail := ItemDetail{
-			ID:       item.ID,
-			SellerID: item.SellerID,
-			Seller:   &seller,
-			// BuyerID
-			// Buyer
-			Status:      item.Status,
-			Name:        item.Name,
-			Price:       item.Price,
-			Description: item.Description,
-			ImageURL:    getImageURL(item.ImageName),
-			CategoryID:  item.CategoryID,
-			// TransactionEvidenceID
-			// TransactionEvidenceStatus
-			// ShippingStatus
-			Category:  &category,
-			CreatedAt: item.CreatedAt.Unix(),
-		}
-
-		if item.BuyerID != 0 {
-			buyer, err := getUserSimpleByID(tx, item.BuyerID)
+		if itemDetail.BuyerID != 0 {
+			buyer, err := getUserSimpleByID(tx, itemDetail.BuyerID)
 			if err != nil {
 				outputErrorMsg(w, http.StatusNotFound, "buyer not found")
 				tx.Rollback()
 				return
 			}
-			itemDetail.BuyerID = item.BuyerID
 			itemDetail.Buyer = &buyer
 		}
 
 		transactionEvidence := TransactionEvidence{}
-		err = tx.Get(&transactionEvidence, "SELECT * FROM `transaction_evidences` WHERE `item_id` = ?", item.ID)
+		err = tx.Get(&transactionEvidence, "SELECT * FROM `transaction_evidences` WHERE `item_id` = ?", itemDetail.ID)
 		if err != nil && err != sql.ErrNoRows {
 			// It's able to ignore ErrNoRows
 			log.Print(err)
@@ -1039,8 +1087,6 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 			itemDetail.TransactionEvidenceStatus = transactionEvidence.Status
 			itemDetail.ShippingStatus = ssr.Status
 		}
-
-		itemDetails = append(itemDetails, itemDetail)
 	}
 	tx.Commit()
 
