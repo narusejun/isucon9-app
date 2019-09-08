@@ -882,7 +882,6 @@ func getUserItems(w http.ResponseWriter, r *http.Request) {
 }
 
 func getTransactions(w http.ResponseWriter, r *http.Request) {
-
 	user, errCode, errMsg := getUser(r)
 	if errMsg != "" {
 		outputErrorMsg(w, errCode, errMsg)
@@ -911,13 +910,11 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	tx := dbx.MustBegin()
-
 	var rows *sql.Rows
 
 	if itemID > 0 && createdAt > 0 {
 		// paging
-		rows, err = tx.Query(`
+		rows, err = dbx.Query(`
 			SELECT
 				items.id,
 				items.seller_id,
@@ -969,12 +966,11 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			log.Print(err)
 			outputErrorMsg(w, http.StatusInternalServerError, "db error")
-			tx.Rollback()
 			return
 		}
 	} else {
 		// 1st page
-		rows, err = tx.Query(`
+		rows, err = dbx.Query(`
 			SELECT
 				items.id,
 				items.seller_id,
@@ -1022,7 +1018,6 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			log.Print(err)
 			outputErrorMsg(w, http.StatusInternalServerError, "db error")
-			tx.Rollback()
 			return
 		}
 	}
@@ -1063,7 +1058,6 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 		)
 		if err != nil {
 			outputErrorMsg(w, http.StatusInternalServerError, err.Error())
-			tx.Rollback()
 			return
 		}
 
@@ -1075,7 +1069,6 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 		itemDetails = append(itemDetails, itemDetail)
 	}
 	rows.Close()
-	tx.Commit()
 
 	hasNext := false
 	if len(itemDetails) > TransactionsPerPage {
