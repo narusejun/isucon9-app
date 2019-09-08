@@ -15,6 +15,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strconv"
+	"sync"
 	"time"
 
 	_ "github.com/go-sql-driver/mysql"
@@ -411,7 +412,43 @@ func getUser(r *http.Request) (user User, errCode int, errMsg string) {
 	return user, http.StatusOK, ""
 }
 
+/////////////////////////////////////////////
+type UserSimpleCahce struct {
+	sync.RWMutex
+	userId2User map[int64]*UserSimple
+}
+
+func NewUserCache() *UserSimpleCahce {
+	m := make(map[int64]*UserSimple)
+	c := &UserSimpleCahce{
+		userId2User: m,
+	}
+	return c
+}
+
+func (c *UserSimpleCahce) Set(key int64, value *UserSimple) {
+	c.Lock()
+	c.userId2User[key] = value
+	c.Unlock()
+}
+
+func (c *UserSimpleCahce) Get(key int64) (*UserSimple, bool) {
+	c.RLock()
+	v, found := c.userId2User[key]
+	c.RUnlock()
+	return v, found
+}
+
+/////////////////////////////////////////////
+
+var userSimpleCache = NewUserCache()
+
 func getUserSimpleByID(q sqlx.Queryer, userID int64) (userSimple UserSimple, err error) {
+
+	if v, ok := userSimpleCache.Get(userID); ok {
+		return *v, nil
+	}
+
 	user := User{}
 	err = sqlx.Get(q, &user, "SELECT * FROM `users` WHERE `id` = ?", userID)
 	if err != nil {
@@ -420,6 +457,8 @@ func getUserSimpleByID(q sqlx.Queryer, userID int64) (userSimple UserSimple, err
 	userSimple.ID = user.ID
 	userSimple.AccountName = user.AccountName
 	userSimple.NumSellItems = user.NumSellItems
+
+	userSimpleCache.Set(userID, &userSimple)
 	return userSimple, err
 }
 
@@ -2069,6 +2108,14 @@ func postSell(w http.ResponseWriter, r *http.Request) {
 		outputErrorMsg(w, http.StatusInternalServerError, "db error")
 		return
 	}
+
+	userSimple := UserSimple{}
+
+	userSimple.AccountName = seller.AccountName
+	userSimple.ID = seller.ID
+	userSimple.NumSellItems = seller.NumSellItems + 1
+
+	userSimpleCache.Set(userSimple.ID, &userSimple)
 
 	now := time.Now()
 	_, err = tx.Exec("UPDATE `users` SET `num_sell_items`=?, `last_bump`=? WHERE `id`=?",
