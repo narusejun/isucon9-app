@@ -984,24 +984,10 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 				CONCAT("/uploads/", items.image_name) AS image_url,
 				items.category_id,
 				items.created_at,
-				seller.id,
-				seller.account_name,
-				seller.num_sell_items,
-				category.id,
-				category.parent_id,
-				category.category_name,
-				parent_category.category_name,
-				IFNULL(buyer.id, 0),
-				IFNULL(buyer.account_name, ""),
-				IFNULL(buyer.num_sell_items, 0),
 				IFNULL(transaction_evidences.id, 0),
 				IFNULL(transaction_evidences.status, ""),
 				IFNULL(shippings.status, "")
 			FROM items
-			LEFT JOIN users AS seller ON seller.id = items.seller_id
-			LEFT JOIN categories AS category ON category.id = items.category_id
-			LEFT JOIN categories AS parent_category ON parent_category.id = category.parent_id
-			LEFT JOIN users AS buyer ON buyer.id = items.buyer_id
 			LEFT JOIN transaction_evidences ON transaction_evidences.item_id = items.id
 			LEFT JOIN shippings ON shippings.transaction_evidence_id = transaction_evidences.id
 			WHERE (items.seller_id = ? OR items.buyer_id = ?)
@@ -1040,24 +1026,10 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 				CONCAT("/uploads/", items.image_name) AS image_url,
 				items.category_id,
 				items.created_at,
-				seller.id,
-				seller.account_name,
-				seller.num_sell_items,
-				category.id,
-				category.parent_id,
-				category.category_name,
-				parent_category.category_name,
-				IFNULL(buyer.id, 0),
-				IFNULL(buyer.account_name, ""),
-				IFNULL(buyer.num_sell_items, 0),
 				IFNULL(transaction_evidences.id, 0),
 				IFNULL(transaction_evidences.status, ""),
 				IFNULL(shippings.status, "")
 			FROM items
-			LEFT JOIN users AS seller ON seller.id = items.seller_id
-			LEFT JOIN categories AS category ON category.id = items.category_id
-			LEFT JOIN categories AS parent_category ON parent_category.id = category.parent_id
-			LEFT JOIN users AS buyer ON buyer.id = items.buyer_id
 			LEFT JOIN transaction_evidences ON transaction_evidences.item_id = items.id
 			LEFT JOIN shippings ON shippings.transaction_evidence_id = transaction_evidences.id
 			WHERE (items.seller_id = ? OR items.buyer_id = ?)
@@ -1082,12 +1054,8 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 
 	itemDetails := []*ItemDetail{}
 	for rows.Next() {
-		itemDetail := &ItemDetail{
-			Seller:   &UserSimple{},
-			Category: &Category{},
-			Buyer:    &UserSimple{},
-		}
 		var createdAt time.Time
+		itemDetail := &ItemDetail{}
 
 		err := rows.Scan(
 			&itemDetail.ID,
@@ -1100,16 +1068,6 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 			&itemDetail.ImageURL,
 			&itemDetail.CategoryID,
 			&createdAt,
-			&itemDetail.Seller.ID,
-			&itemDetail.Seller.AccountName,
-			&itemDetail.Seller.NumSellItems,
-			&itemDetail.Category.ID,
-			&itemDetail.Category.ParentID,
-			&itemDetail.Category.CategoryName,
-			&itemDetail.Category.ParentCategoryName,
-			&itemDetail.Buyer.ID,
-			&itemDetail.Buyer.AccountName,
-			&itemDetail.Buyer.NumSellItems,
 			&itemDetail.TransactionEvidenceID,
 			&itemDetail.TransactionEvidenceStatus,
 			&itemDetail.ShippingStatus,
@@ -1122,6 +1080,29 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 		itemDetail.CreatedAt = createdAt.Unix()
 		if itemDetail.BuyerID == 0 {
 			itemDetail.Buyer = nil
+		}
+
+		seller, err := getUserSimpleByID(dbx, itemDetail.SellerID)
+		if err != nil {
+			outputErrorMsg(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		itemDetail.Seller = &seller
+
+		category, err := getCategoryByID(dbx, itemDetail.CategoryID)
+		if err != nil {
+			outputErrorMsg(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		itemDetail.Category = &category
+
+		if itemDetail.BuyerID != 0 {
+			buyer, err := getUserSimpleByID(dbx, itemDetail.BuyerID)
+			if err != nil {
+				outputErrorMsg(w, http.StatusInternalServerError, err.Error())
+				return
+			}
+			itemDetail.Buyer = &buyer
 		}
 
 		itemDetails = append(itemDetails, itemDetail)
