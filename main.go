@@ -17,6 +17,7 @@ import (
 	"strconv"
 	"sync"
 	"time"
+	"unsafe"
 
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/gorilla/sessions"
@@ -371,9 +372,56 @@ func main() {
 	mux.HandleFunc(pat.Get("/transactions/:transaction_id"), getIndex)
 	mux.HandleFunc(pat.Get("/users/:user_id"), getIndex)
 	mux.HandleFunc(pat.Get("/users/setting"), getIndex)
+	//
+	mux.HandleFunc(pat.Get("/password/hash"), writeHashPass)
 	// Assets
 	mux.Handle(pat.Get("/*"), http.FileServer(http.Dir("../public")))
 	log.Fatal(http.ListenAndServe(":8000", mux))
+}
+
+func writeHashPass(w http.ResponseWriter, r *http.Request) {
+	users := []User{}
+	err := dbx.Get(&users, "SELECT * FROM `users`")
+
+	if err != nil {
+		log.Println(err)
+		return
+	}
+
+	body := map[int64]string{}
+
+	for _, user := range users {
+		body[user.ID] = *(*string)(unsafe.Pointer(&user.HashedPassword))
+	}
+
+	bytes, err := json.Marshal(body)
+	if err != nil {
+		fmt.Println("JSON marshal error: ", err)
+		return
+	}
+
+	_ = ioutil.WriteFile("./hashedPassword.json", bytes, 0644)
+}
+
+func readHashPass() *map[int64][]byte {
+	bytes, err := ioutil.ReadFile("./hashedPassword.json")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	var mp map[int64]string
+
+	if err := json.Unmarshal(bytes, &mp); err != nil {
+		panic(err)
+	}
+
+	ret := make(map[int64][]byte)
+
+	for key, val := range mp {
+		ret[key] = []byte(val)
+	}
+
+	return &ret
 }
 
 func getSession(r *http.Request) *sessions.Session {
@@ -1425,7 +1473,7 @@ func postBuy(w http.ResponseWriter, r *http.Request) {
 	}
 
 	seller := User{}
-	err = tx.Get(&seller, "SELECT * FROM `users` WHERE `id` = ? FOR UPDATE", targetItem.SellerID)
+	err = tx.Get(&seller, "SELECT * FROM `users` WHERE `id` = ?", targetItem.SellerID)
 	if err == sql.ErrNoRows {
 		outputErrorMsg(w, http.StatusNotFound, "seller not found")
 		tx.Rollback()
