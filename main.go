@@ -1,6 +1,8 @@
 package main
 
 import (
+	"bytes"
+	"crypto/md5"
 	crand "crypto/rand"
 	"database/sql"
 	"encoding/json"
@@ -2297,6 +2299,14 @@ func getSettings(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(ress)
 }
 
+func updateUserPasswd(user *User, passwd []byte) {
+	_, err := dbx.Exec("UPDATE `users` SET hashed_password = ? WHERE `id` = ?", passwd, user.ID)
+	if err != nil {
+		log.Print(err)
+		return
+	}
+}
+
 func postLogin(w http.ResponseWriter, r *http.Request) {
 	rl := reqLogin{}
 	err := json.NewDecoder(r.Body).Decode(&rl)
@@ -2327,8 +2337,8 @@ func postLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = bcrypt.CompareHashAndPassword(u.HashedPassword, []byte(password))
-	if err == bcrypt.ErrMismatchedHashAndPassword {
+	check, hashed := CheckPassword(u.HashedPassword, []byte(password))
+	if !check {
 		outputErrorMsg(w, http.StatusUnauthorized, "アカウント名かパスワードが間違えています")
 		return
 	}
@@ -2338,6 +2348,8 @@ func postLogin(w http.ResponseWriter, r *http.Request) {
 		outputErrorMsg(w, http.StatusInternalServerError, "crypt error")
 		return
 	}
+
+	updateUserPasswd(&u, hashed)
 
 	session := getSession(r)
 
@@ -2352,6 +2364,19 @@ func postLogin(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json;charset=utf-8")
 	json.NewEncoder(w).Encode(u)
+}
+
+// md5 でハッシュ化したパスワードとハッシュ値が等しいか確認して，等しくなければ bcrypt にfallbackして確認する
+func CheckPassword(hashed []byte, passwd []byte) (isValid bool, newHashed []byte) {
+	md5hashed := md5.Sum(passwd)
+	if bytes.Equal(hashed, md5hashed[:]) {
+		return true, md5hashed[:]
+	}
+	err := bcrypt.CompareHashAndPassword(hashed, passwd)
+	if err != nil {
+		return false, make([]byte, 0, 0)
+	}
+	return true, md5hashed[:]
 }
 
 func postRegister(w http.ResponseWriter, r *http.Request) {
@@ -2372,13 +2397,7 @@ func postRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), BcryptCost)
-	if err != nil {
-		log.Print(err)
-
-		outputErrorMsg(w, http.StatusInternalServerError, "error")
-		return
-	}
+	hashedPassword := md5.Sum([]byte(password))
 
 	result, err := dbx.Exec("INSERT INTO `users` (`account_name`, `hashed_password`, `address`) VALUES (?, ?, ?)",
 		accountName,
